@@ -1,0 +1,79 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(caret)
+library(MLmetrics)
+```
+
+```{r}
+train <- read.csv("data/train.csv")
+meta <- read.csv("data/metadata.csv")
+```
+
+```{r}
+prep_data <- function(x, test=F){
+  for(j in 1:nrow(meta)){
+    
+    if(str_detect(meta[j, 2], "^Qualitativo")){
+      
+      if(str_detect(meta[j, 2], "Qualitativo ordinal")){
+        x[,j] <- factor(x %>% pull(j), ordered=T)
+      }else if(str_detect(meta[j, 2], "Qualitativo nominal")){
+        x[,j] <- as.factor(x %>% pull(j))
+      }   
+    }
+  }
+
+  
+  return(x)
+}
+
+train <- prep_data(train)
+```
+
+```{r}
+paste("Nº features originais", ncol(train)-2)
+```
+
+# Remove features com baixa variância
+```{r remove nzv}
+remove_cols <- nearZeroVar(train, names = TRUE)
+remove_cols
+```
+```{r cols finais pelo nvz}
+total_cols <- colnames(train)
+final_cols_nvz <- setdiff(total_cols, remove_cols)
+train <- train[, final_cols_nvz]
+
+paste("Nº features pós NVZ", ncol(train)-2)
+```
+
+
+```{r}
+myFolds <- createFolds(train$y, k = 3)
+
+train_control <- trainControl(
+  method = "cv", 
+  index = myFolds,
+  number = 3, 
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  verboseIter = 1 
+)
+```
+
+```{r}
+set.seed(231192)
+model_ranger <- train(factor(y) ~.,
+                      data = train %>% select(-id),
+                      method = "ranger",
+                      metric = "ROC",
+                      importance = "permutation",
+                      trControl = train_control)
+
+```
+
